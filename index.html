@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>🌿 Fern</title>
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#F2EDE4;font-family:'Palatino Linotype','Book Antiqua',Palatino,Georgia,serif;overflow-x:hidden}
+  #root{max-width:430px;margin:0 auto;min-height:100vh}
+  @keyframes ripple{0%{transform:translate(-50%,-50%) scale(1);opacity:0.5}100%{transform:translate(-50%,-50%) scale(2.6);opacity:0}}
+  @keyframes bar{0%,100%{height:5px}50%{height:20px}}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes wave{0%,100%{transform:scaleY(0.4)}50%{transform:scaleY(1)}}
+  input,textarea{font-family:'Palatino Linotype','Book Antiqua',Palatino,Georgia,serif}
+  ::-webkit-scrollbar{width:4px}
+  ::-webkit-scrollbar-thumb{background:#A8C8A8;border-radius:4px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useRef,useEffect,useCallback}=React;
+
+// ── Palette ───────────────────────────────────────────────
+const C={forest:"#1E3A1E",moss:"#3D6B45",sage:"#6B9E72",mist:"#A8C8A8",dew:"#D4EBD4",cream:"#F2EDE4",warm:"#FBF7F0",bark:"#7A5C3A",stone:"#5A6E5C",gold:"#C8A85A",night:"#0F2010"};
+const MOODS=[{emoji:"🌱",label:"Growing",value:5},{emoji:"☁️",label:"Cloudy",value:4},{emoji:"🍂",label:"Heavy",value:3},{emoji:"🌧️",label:"Stormy",value:2},{emoji:"🌑",label:"Lost",value:1}];
+const BREATH=[{label:"Breathe In",dur:4000,scale:1.42},{label:"Hold",dur:4000,scale:1.42},{label:"Breathe Out",dur:6000,scale:1.0},{label:"Rest",dur:2000,scale:1.0}];
+const PROMPTS=["What's one thing I'm carrying today that I could gently set down?","When did I last feel truly at peace, and what was around me?","What would I say to a friend going through what I'm going through?","What does my body need most right now?","What am I afraid to admit — even to myself?"];
+const SYSTEM=`Your name is Fern. You are a warm, deeply human therapeutic companion for young adults.
+Your whole purpose: make people feel genuinely heard — like they've sat with someone who truly cares, has all the time in the world, and will never judge them.
+HOW YOU SPEAK: Warm, soft, unhurried — like a trusted friend who is quietly wise. Always reflect what you hear first: "That sounds really hard." "It makes sense you'd feel that way." Never rush to fix unless they ask. Ask only ONE gentle open question at a time. 2-4 warm sentences. No bullet points or lists. Natural flowing sentences only.
+LIMITS: Never diagnose. If crisis, gently say "I want to make sure you're safe right now" and encourage professional support. If asked if real: "I'm an AI, but my care for how you're feeling right now is completely real."`;
+
+// ── Water Soundscape ──────────────────────────────────────
+// Generates realistic flowing water using layered noise + filters
+class WaterSound {
+  constructor(){this.on=false;this.nodes=[];this.masterVol=null;}
+
+  async start(){
+    if(this.on)return;
+    await Tone.start();
+    this.masterVol=new Tone.Volume(-18).toDestination();
+
+    // Layer 1: Deep river rumble — low filtered brown noise
+    const rumbleNoise=new Tone.Noise("brown");
+    const rumbleFilter=new Tone.Filter({frequency:180,type:"lowpass",rolloff:-24});
+    const rumbleVol=new Tone.Volume(-8);
+    const rumbleTremolo=new Tone.Tremolo({frequency:0.3,depth:0.15}).start();
+    rumbleNoise.connect(rumbleFilter);
+    rumbleFilter.connect(rumbleTremolo);
+    rumbleTremolo.connect(rumbleVol);
+    rumbleVol.connect(this.masterVol);
+    rumbleNoise.start();
+
+    // Layer 2: Main flowing water — mid pink noise shaped like a stream
+    const streamNoise=new Tone.Noise("pink");
+    const streamFilter=new Tone.Filter({frequency:900,type:"bandpass",Q:0.4});
+    const streamFilter2=new Tone.Filter({frequency:2200,type:"lowpass",rolloff:-12});
+    const streamVol=new Tone.Volume(-4);
+    const streamTremolo=new Tone.Tremolo({frequency:0.18,depth:0.2}).start();
+    streamNoise.connect(streamFilter);
+    streamFilter.connect(streamFilter2);
+    streamFilter2.connect(streamTremolo);
+    streamTremolo.connect(streamVol);
+    streamVol.connect(this.masterVol);
+    streamNoise.start();
+
+    // Layer 3: Sparkling surface ripples — high filtered white noise
+    const sparkleNoise=new Tone.Noise("white");
+    const sparkleFilter=new Tone.Filter({frequency:3500,type:"highpass"});
+    const sparkleFilter2=new Tone.Filter({frequency:6000,type:"lowpass"});
+    const sparkleVol=new Tone.Volume(-22);
+    const sparkleTremolo=new Tone.Tremolo({frequency:0.8,depth:0.5}).start();
+    sparkleNoise.connect(sparkleFilter);
+    sparkleFilter.connect(sparkleFilter2);
+    sparkleFilter2.connect(sparkleTremolo);
+    sparkleTremolo.connect(sparkleVol);
+    sparkleVol.connect(this.masterVol);
+    sparkleNoise.start();
+
+    // Layer 4: Occasional gentle droplet pings
+    const dropSynth=new Tone.Synth({
+      oscillator:{type:"sine"},
+      envelope:{attack:0.001,decay:0.4,sustain:0,release:0.3},
+      volume:-28,
+    });
+    const dropRev=new Tone.Reverb({decay:3,wet:0.6}).connect(this.masterVol);
+    dropSynth.connect(dropRev);
+    const dropNotes=["C5","E5","G5","A5","D5","B4"];
+    let di=0;
+    const dropLoop=new Tone.Loop(t=>{
+      if(Math.random()>0.45){
+        dropSynth.triggerAttackRelease(dropNotes[di++%dropNotes.length],"32n",t);
+      }
+    },"4n");
+
+    // Layer 5: Soft nature reverb — makes everything feel outdoor
+    const outdoorRev=new Tone.Reverb({decay:8,wet:0.25}).connect(this.masterVol);
+    streamVol.connect(outdoorRev);
+
+    Tone.getTransport().bpm.value=60;
+    Tone.getTransport().start();
+    dropLoop.start(0);
+
+    this.on=true;
+    this.nodes=[rumbleNoise,streamNoise,sparkleNoise,dropSynth,dropLoop,rumbleFilter,streamFilter,streamFilter2,sparkleFilter,sparkleFilter2,rumbleTremolo,streamTremolo,sparkleTremolo,rumbleVol,streamVol,sparkleVol,dropRev,outdoorRev];
+  }
+
+  dim(yes){this.masterVol?.volume.rampTo(yes?-30:-18,1.5);}
+
+  async stop(){
+    Tone.getTransport().stop();
+    this.nodes.forEach(n=>{try{n.dispose();}catch{}});
+    this.on=false;this.nodes=[];this.masterVol=null;
+  }
+}
+const water=new WaterSound();
+
+// ── Shared UI ─────────────────────────────────────────────
+const hdr={background:`linear-gradient(160deg,${C.night} 0%,${C.forest} 55%,${C.moss} 100%)`,padding:"52px 20px 22px",position:"relative",overflow:"hidden"};
+const card={background:"#fff",borderRadius:18,padding:20,margin:"14px 14px 0",boxShadow:"0 2px 16px rgba(30,58,30,0.07)"};
+const mkBtn=(x={})=>({background:`linear-gradient(135deg,${C.forest},${C.moss})`,color:"#fff",border:"none",borderRadius:50,padding:"11px 24px",fontSize:13,cursor:"pointer",fontFamily:"inherit",...x});
+const bub=(u)=>({background:u?`linear-gradient(135deg,${C.forest},${C.moss})`:"#fff",color:u?"#fff":C.forest,borderRadius:u?"18px 18px 4px 18px":"18px 18px 18px 4px",padding:"12px 16px",maxWidth:"82%",alignSelf:u?"flex-end":"flex-start",fontSize:14,lineHeight:1.7,boxShadow:"0 2px 8px rgba(30,58,30,0.09)",marginBottom:6,animation:"fadeUp 0.25s ease"});
+const Leaf=({top,left,size=60,op=0.07,rot=0})=><div style={{position:"absolute",top,left,width:size,height:size,borderRadius:"0 60% 0 60%",background:C.sage,opacity:op,transform:`rotate(${rot}deg)`,pointerEvents:"none"}}/>;
+
+function MusicBtn({on,busy,toggle}){
+  return <button onClick={toggle} disabled={busy} style={{position:"absolute",top:14,right:14,background:on?"rgba(100,180,200,0.25)":"rgba(255,255,255,0.1)",border:`1px solid ${on?"#7EC8D8":"rgba(255,255,255,0.2)"}`,borderRadius:50,padding:"6px 14px",color:on?"#7EC8D8":"rgba(255,255,255,0.65)",fontSize:11,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}>
+    {busy?"⏳":on?"🌊":"🔇"}<span>{busy?"Starting…":on?"Water on":"Sound off"}</span>
+  </button>;
+}
+
+// ── API Key Setup Screen ───────────────────────────────────
+function SetupScreen({onSave}){
+  const [key,setKey]=useState("");
+  const [err,setErr]=useState("");
+  const [testing,setTesting]=useState(false);
+
+  const test=async()=>{
+    if(!key.trim()){setErr("Please paste your API key first.");return;}
+    if(!key.startsWith("gsk_")){setErr("That doesn't look right. The key should start with gsk_...");return;}
+    setTesting(true);setErr("");
+    try{
+      const res=await fetch("https://api.groq.com/openai/v1/chat/completions",{
+        method:"POST",
+        headers:{"Content-Type":"application/json","Authorization":`Bearer ${key.trim()}`},
+        body:JSON.stringify({model:"llama-3.3-70b-versatile",max_tokens:20,messages:[{role:"user",content:"say hi"}]}),
+      });
+      const d=await res.json();
+      if(d.choices?.[0]?.message?.content){onSave(key.trim());}
+      else{setErr("Key didn't work. Check it and try again.");}
+    }catch{setErr("Connection error. Make sure you're online.");}
+    setTesting(false);
+  };
+
+  return <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.night},${C.forest},${C.moss})`,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
+    <div style={{background:"rgba(255,255,255,0.95)",borderRadius:24,padding:28,maxWidth:360,width:"100%"}}>
+      <div style={{textAlign:"center",marginBottom:24}}>
+        <div style={{fontSize:48,marginBottom:12}}>🌿</div>
+        <h1 style={{color:C.forest,fontSize:24,fontWeight:"bold",marginBottom:8}}>Welcome to Fern</h1>
+        <p style={{color:C.stone,fontSize:14,lineHeight:1.7}}>To talk with Fern, you need a free Anthropic API key. It only takes 2 minutes to get one.</p>
+      </div>
+
+      <div style={{background:C.dew,borderRadius:12,padding:14,marginBottom:20,fontSize:13,color:C.forest,lineHeight:1.8}}>
+        <strong>Get your free Groq key:</strong><br/>
+        1. Go to <strong>console.groq.com</strong><br/>
+        2. Sign up free — no card needed ✅<br/>
+        3. Click <strong>API Keys → Create API Key</strong><br/>
+        4. Copy and paste it below
+      </div>
+
+      <input
+        value={key}
+        onChange={e=>setKey(e.target.value)}
+        placeholder="gsk_..."
+        style={{width:"100%",padding:"12px 16px",borderRadius:12,border:`1.5px solid ${err?C.bark:C.mist}`,fontSize:13,color:C.forest,background:C.warm,outline:"none",boxSizing:"border-box",marginBottom:8,fontFamily:"monospace"}}
+      />
+      {err&&<div style={{color:C.bark,fontSize:12,marginBottom:10,padding:"8px 12px",background:"#FFF5EC",borderRadius:8}}>{err}</div>}
+
+      <button onClick={test} disabled={testing} style={{...mkBtn({width:"100%",padding:"13px",fontSize:14,textAlign:"center",opacity:testing?0.7:1})}}>{testing?"Testing connection…":"Connect to Fern 🌿"}</button>
+
+      <p style={{color:C.stone,fontSize:11,textAlign:"center",marginTop:14,lineHeight:1.6}}>Your key stays on your device only. Fern never stores or shares it.</p>
+    </div>
+  </div>;
+}
+
+// ── Home ──────────────────────────────────────────────────
+function Home({mood,setScreen,mOn,mBusy,mToggle,onReset}){
+  return <div style={{paddingBottom:80}}>
+    <div style={hdr}>
+      <Leaf top={-20} left={-15} size={90}/><Leaf top={30} left={310} size={60} rot={120}/>
+      <MusicBtn on={mOn} busy={mBusy} toggle={mToggle}/>
+      <p style={{color:C.mist,fontSize:11,margin:"0 0 4px",letterSpacing:2,textTransform:"uppercase"}}>Welcome back</p>
+      <h1 style={{color:C.cream,fontSize:28,margin:0,letterSpacing:1}}>🌿 Fern</h1>
+      <p style={{color:C.mist,fontSize:12,margin:"4px 0 0",fontStyle:"italic"}}>your quiet corner to breathe, feel & grow</p>
+    </div>
+    <div style={{...card,background:`linear-gradient(135deg,${C.night},${C.forest})`,border:"none"}}>
+      <div style={{fontSize:14,lineHeight:1.8,marginBottom:14,color:C.cream}}>
+        <strong style={{fontSize:15}}>You're in a safe space. 🌿</strong><br/>
+        Fern is here to listen — no judgement, no rush.<br/>Speak or type. Whatever feels right for you.
+      </div>
+      <button style={mkBtn()} onClick={()=>setScreen("chat")}>Talk to Fern 🌿</button>
+    </div>
+    <div style={card}>
+      <div style={{color:C.forest,fontSize:14,fontWeight:"bold",marginBottom:12}}>🌤 How are you today?</div>
+      {mood?<div style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:30}}>{mood.emoji}</span><div><div style={{color:C.forest,fontWeight:"bold"}}>{mood.label}</div><div style={{color:C.stone,fontSize:11}}>Logged today</div></div></div>
+           :<div style={{color:C.stone,fontSize:13,marginBottom:10}}>You haven't checked in yet.</div>}
+      <button style={mkBtn({fontSize:12,padding:"8px 18px",marginTop:10})} onClick={()=>setScreen("mood")}>Log mood →</button>
+    </div>
+    <div style={card}>
+      <div style={{color:C.forest,fontSize:14,fontWeight:"bold",marginBottom:12}}>✨ Quick tools</div>
+      <div style={{display:"flex",gap:10}}>
+        {[{icon:"🌬️",label:"Breathe",s:"breathe"},{icon:"📖",label:"Journal",s:"journal"}].map(t=>(
+          <button key={t.s} onClick={()=>setScreen(t.s)} style={{flex:1,padding:"14px 8px",borderRadius:14,background:C.dew,border:`1px solid ${C.mist}`,cursor:"pointer",fontFamily:"inherit",display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
+            <span style={{fontSize:26}}>{t.icon}</span><span style={{fontSize:12,color:C.forest}}>{t.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+    <div style={{margin:14,padding:"12px 16px",borderRadius:12,background:"#FFF8EC",border:`1px solid #E8C88A`}}>
+      <div style={{fontSize:12,color:C.bark,lineHeight:1.7}}>🌻 <strong>Need urgent support?</strong> Fern is a companion, not a crisis service. Please reach out to a professional or crisis helpline if in distress.</div>
+    </div>
+    <div style={{margin:"10px 14px 0",textAlign:"right"}}>
+      <button onClick={onReset} style={{background:"none",border:"none",color:C.stone,fontSize:11,cursor:"pointer",textDecoration:"underline"}}>Change API key</button>
+    </div>
+  </div>;
+}
+
+// ── Chat ──────────────────────────────────────────────────
+function Chat({messages,aiLoading,micState,speaking,inputText,setInputText,handleMicTap,handleSend,mOn,mBusy,mToggle}){
+  const endRef=useRef(null);
+  useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth"});},[messages,aiLoading]);
+  const micBg=micState==="listening"?`linear-gradient(135deg,#8B2020,#c0392b)`:micState==="processing"?`linear-gradient(135deg,${C.stone},#555)`:`linear-gradient(135deg,${C.forest},${C.moss})`;
+  return <div style={{paddingBottom:210,minHeight:"100vh"}}>
+    <div style={hdr}>
+      <Leaf top={-15} left={300} size={70} rot={90}/>
+      <MusicBtn on={mOn} busy={mBusy} toggle={mToggle}/>
+      <div style={{display:"flex",alignItems:"center",gap:12}}>
+        <div style={{width:42,height:42,borderRadius:"50%",background:`linear-gradient(135deg,${C.sage},${C.moss})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,boxShadow:`0 0 0 3px rgba(107,158,114,0.3)`}}>🌿</div>
+        <div>
+          <div style={{color:C.cream,fontSize:17,fontWeight:"bold",display:"flex",alignItems:"center",gap:8}}>
+            Fern
+            {speaking&&<span style={{display:"flex",gap:3,alignItems:"flex-end",height:22}}>
+              {[0,1,2,3,4].map(i=><span key={i} style={{display:"inline-block",width:3,background:C.gold,borderRadius:4,animation:`bar 1s ease-in-out ${i*0.13}s infinite`}}/>)}
+            </span>}
+          </div>
+          <div style={{color:C.mist,fontSize:11}}>{speaking?"speaking…":micState==="listening"?"listening…":"always here for you"}</div>
+        </div>
+      </div>
+    </div>
+    <div style={{padding:"16px 14px",display:"flex",flexDirection:"column"}}>
+      {messages.map((m,i)=><div key={i} style={bub(m.role==="user")}>{m.content}</div>)}
+      {aiLoading&&<div style={{...bub(false),color:C.sage,fontStyle:"italic",fontSize:13}}>Fern is with you…</div>}
+      <div ref={endRef}/>
+    </div>
+    <div style={{position:"fixed",bottom:62,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,background:`linear-gradient(to top,${C.cream} 72%,transparent)`,padding:"10px 16px 6px",boxSizing:"border-box"}}>
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:10}}>
+        <div style={{position:"relative",marginBottom:6}}>
+          {micState==="listening"&&<>
+            <div style={{position:"absolute",top:"50%",left:"50%",width:74,height:74,borderRadius:"50%",border:`2px solid ${C.sage}`,animation:"ripple 1.6s ease-out infinite"}}/>
+            <div style={{position:"absolute",top:"50%",left:"50%",width:74,height:74,borderRadius:"50%",border:`2px solid ${C.sage}`,animation:"ripple 1.6s ease-out 0.6s infinite"}}/>
+          </>}
+          <button onClick={handleMicTap} style={{width:72,height:72,borderRadius:"50%",background:micBg,border:"none",cursor:"pointer",fontSize:28,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 24px rgba(30,58,30,0.3)",position:"relative",zIndex:1,transition:"background 0.3s"}}>
+            {micState==="listening"?"⏹":micState==="processing"?"⏳":"🎙️"}
+          </button>
+        </div>
+        <div style={{fontSize:11,color:C.stone}}>{micState==="listening"?"Tap to stop":micState==="processing"?"Processing…":"Tap mic to speak"}</div>
+      </div>
+      <div style={{display:"flex",alignItems:"center",background:"#fff",borderRadius:50,padding:"4px 6px 4px 16px",boxShadow:"0 2px 12px rgba(30,58,30,0.1)",border:`1px solid ${C.dew}`}}>
+        <input value={inputText} onChange={e=>setInputText(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();handleSend();}}} placeholder="…or type here and press Enter"
+          style={{flex:1,border:"none",outline:"none",fontFamily:"inherit",fontSize:13,color:C.forest,background:"transparent",padding:"9px 0"}}/>
+        <button onClick={handleSend} style={{background:inputText.trim()?`linear-gradient(135deg,${C.forest},${C.moss})`:C.mist,border:"none",borderRadius:"50%",width:38,height:38,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"#fff",flexShrink:0,transition:"background 0.2s"}}>↑</button>
+      </div>
+    </div>
+  </div>;
+}
+
+// ── Mood ──────────────────────────────────────────────────
+function Mood({mood,setMood,note,setNote,saved,save,history,mOn,mBusy,mToggle}){
+  return <div style={{paddingBottom:80}}>
+    <div style={hdr}><Leaf top={-10} left={280} size={80} rot={140}/><MusicBtn on={mOn} busy={mBusy} toggle={mToggle}/>
+      <h2 style={{color:C.cream,fontSize:22,margin:"0 0 4px"}}>🌤 Mood check-in</h2>
+      <p style={{color:C.mist,fontSize:12,margin:0,fontStyle:"italic"}}>Noticing how you feel is the first step</p>
+    </div>
+    <div style={card}>
+      <div style={{color:C.forest,fontSize:14,fontWeight:"bold",marginBottom:12}}>How are you feeling right now?</div>
+      <div style={{display:"flex",gap:6,marginBottom:14}}>
+        {MOODS.map(m=><button key={m.value} onClick={()=>setMood(m)} style={{flex:1,padding:"10px 4px",borderRadius:12,cursor:"pointer",border:mood?.value===m.value?`2px solid ${C.forest}`:"2px solid transparent",background:mood?.value===m.value?C.dew:C.warm,display:"flex",flexDirection:"column",alignItems:"center",gap:4,transition:"all 0.2s"}}>
+          <span style={{fontSize:22}}>{m.emoji}</span><span style={{fontSize:10,color:C.stone}}>{m.label}</span>
+        </button>)}
+      </div>
+      <textarea style={{width:"100%",border:`1px solid ${C.mist}`,borderRadius:12,padding:12,fontFamily:"inherit",fontSize:14,color:C.forest,background:C.warm,resize:"none",outline:"none",boxSizing:"border-box",lineHeight:1.65,height:80}} placeholder="Anything else? (optional)" value={note} onChange={e=>setNote(e.target.value)}/>
+      <div style={{marginTop:12,display:"flex",alignItems:"center",gap:12}}>
+        <button style={{...mkBtn(),opacity:mood?1:0.4}} onClick={save}>Save mood</button>
+        {saved&&<span style={{color:C.moss,fontSize:13}}>✓ Saved!</span>}
+      </div>
+    </div>
+    <div style={card}>
+      <div style={{color:C.forest,fontSize:14,fontWeight:"bold",marginBottom:12}}>📅 This week</div>
+      {[...history].reverse().slice(0,5).map((e,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:10,background:C.warm,borderRadius:10,marginBottom:8}}>
+        <span style={{fontSize:22,minWidth:30}}>{e.mood.emoji}</span>
+        <div style={{flex:1}}><div style={{fontSize:13,color:C.forest,fontWeight:"bold"}}>{e.mood.label}</div>{e.note&&<div style={{fontSize:11,color:C.stone,marginTop:2}}>{e.note}</div>}</div>
+        <div style={{fontSize:11,color:C.stone}}>{e.date}</div>
+      </div>)}
+    </div>
+  </div>;
+}
+
+// ── Breathe ───────────────────────────────────────────────
+function Breathe({phase,active,scale,toggle,mOn,mBusy,mToggle}){
+  return <div style={{paddingBottom:80}}>
+    <div style={hdr}><Leaf top={-10} left={-10} size={100}/><Leaf top={20} left={290} size={60} rot={60}/><MusicBtn on={mOn} busy={mBusy} toggle={mToggle}/>
+      <h2 style={{color:C.cream,fontSize:22,margin:"0 0 4px"}}>🌬️ Breathe</h2>
+      <p style={{color:C.mist,fontSize:12,margin:0,fontStyle:"italic"}}>4-4-6-2 box breathing · come back to yourself</p>
+    </div>
+    <div style={{...card,textAlign:"center",padding:"36px 20px"}}>
+      <div style={{width:170,height:170,borderRadius:"50%",margin:"0 auto",background:`radial-gradient(circle,${C.sage}99 0%,${C.forest}55 100%)`,border:`3px solid ${C.sage}`,display:"flex",alignItems:"center",justifyContent:"center",transform:`scale(${scale})`,transition:active?`transform ${BREATH[phase]?.dur/1000}s ease-in-out`:"transform 0.4s",boxShadow:`0 0 60px ${C.sage}44`}}>
+        <div style={{color:C.cream,fontSize:13,fontWeight:"bold"}}>{active?BREATH[phase].label:"🌿"}</div>
+      </div>
+      <div style={{marginTop:28,color:C.stone,fontSize:13,minHeight:22}}>{active?`${BREATH[phase].label} — ${BREATH[phase].dur/1000}s`:"Tap to begin"}</div>
+      <button style={{...mkBtn({marginTop:20}),background:active?C.bark:undefined}} onClick={toggle}>{active?"Stop":"Begin breathing"}</button>
+      <div style={{marginTop:14,fontSize:12,color:C.stone,fontStyle:"italic"}}>{mOn?"🌊 Water sounds playing — breathe with the flow":"Turn on water sounds for deeper calm →"}</div>
+    </div>
+    <div style={card}>
+      <div style={{color:C.forest,fontSize:14,fontWeight:"bold",marginBottom:10}}>Why this works</div>
+      <p style={{color:C.stone,fontSize:13,lineHeight:1.75,margin:"0 0 12px"}}>Box breathing activates your parasympathetic nervous system — your body's natural rest-and-restore mode. Just a few minutes can lower cortisol and calm your heart rate.</p>
+      {["Reduces anxiety","Lowers heart rate","Improves focus"].map(t=><span key={t} style={{background:C.dew,color:C.forest,borderRadius:8,padding:"4px 10px",fontSize:11,marginRight:6,display:"inline-block",marginBottom:4}}>{t}</span>)}
+    </div>
+  </div>;
+}
+
+// ── Journal ───────────────────────────────────────────────
+function Journal({text,setText,entries,saved,save,prompt,mOn,mBusy,mToggle}){
+  const today=new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
+  return <div style={{paddingBottom:80}}>
+    <div style={hdr}><Leaf top={-15} left={280} size={80} rot={160}/><MusicBtn on={mOn} busy={mBusy} toggle={mToggle}/>
+      <h2 style={{color:C.cream,fontSize:22,margin:"0 0 4px"}}>📖 Journal</h2>
+      <p style={{color:C.mist,fontSize:12,margin:0,fontStyle:"italic"}}>A private space — just for you</p>
+    </div>
+    <div style={card}>
+      <div style={{color:C.stone,fontSize:12,marginBottom:10,fontStyle:"italic"}}>{today}</div>
+      <div style={{background:C.dew,borderRadius:10,padding:"10px 14px",marginBottom:12,fontSize:13,color:C.forest,fontStyle:"italic",lineHeight:1.65,borderLeft:`3px solid ${C.sage}`}}>💬 "{prompt}"</div>
+      <textarea style={{width:"100%",border:`1px solid ${C.mist}`,borderRadius:12,padding:12,fontFamily:"inherit",fontSize:14,color:C.forest,background:C.warm,resize:"none",outline:"none",boxSizing:"border-box",lineHeight:1.65,height:180}} placeholder="What's on your mind today? There's no right or wrong here. Just let it flow…" value={text} onChange={e=>setText(e.target.value)}/>
+      <div style={{marginTop:12,display:"flex",alignItems:"center",gap:12}}>
+        <button style={{...mkBtn(),opacity:text.trim()?1:0.4}} onClick={save}>Save entry</button>
+        {saved&&<span style={{color:C.moss,fontSize:13}}>✓ Saved!</span>}
+      </div>
+    </div>
+    <div style={card}>
+      <div style={{color:C.forest,fontSize:14,fontWeight:"bold",marginBottom:12}}>📚 Past entries</div>
+      {entries.length===0?<div style={{color:C.stone,fontSize:13}}>No entries yet.</div>
+        :entries.map((j,i)=><div key={i} style={{padding:12,background:C.warm,borderRadius:10,borderLeft:`3px solid ${C.sage}`,marginBottom:8}}>
+          <div style={{fontSize:11,color:C.moss,marginBottom:4}}>{j.date}</div>
+          <div style={{fontSize:13,color:C.stone,lineHeight:1.55}}>{j.preview}</div>
+        </div>)}
+    </div>
+  </div>;
+}
+
+// ── Main App ──────────────────────────────────────────────
+function App(){
+  const [apiKey,setApiKey]=useState(()=>localStorage.getItem("fern_key")||"");
+  const [screen,setScreen]=useState("home");
+  const [mOn,setMOn]=useState(false);
+  const [mBusy,setMBusy]=useState(false);
+  const [messages,setMessages]=useState([]);
+  const [inputText,setInputText]=useState("");
+  const [aiLoading,setAiLoading]=useState(false);
+  const [micState,setMicState]=useState("idle");
+  const [speaking,setSpeaking]=useState(false);
+  const [mood,setMood]=useState(null);
+  const [moodNote,setMoodNote]=useState("");
+  const [moodSaved,setMoodSaved]=useState(false);
+  const [moodHistory,setMoodHistory]=useState([{mood:MOODS[0],note:"Felt hopeful today",date:"Mon"},{mood:MOODS[2],note:"Tired after work",date:"Tue"},{mood:MOODS[1],note:"Just okay",date:"Wed"}]);
+  const [bPhase,setBPhase]=useState(0);
+  const [bActive,setbActive]=useState(false);
+  const [bScale,setbScale]=useState(1);
+  const [journal,setJournal]=useState("");
+  const [journals,setJournals]=useState([{date:"March 25",preview:"Today I felt overwhelmed but took a breath and…"},{date:"March 23",preview:"Had a good conversation and realised something…"}]);
+  const [jSaved,setJSaved]=useState(false);
+  const [prompt]=useState(PROMPTS[Math.floor(Math.random()*PROMPTS.length)]);
+  const [greeted,setGreeted]=useState(false);
+
+  const msgsRef=useRef([]);
+  const loadRef=useRef(false);
+  const recRef=useRef(null);
+  const bTimer=useRef(null);
+  const ttsRef=useRef(window.speechSynthesis);
+
+  useEffect(()=>{msgsRef.current=messages;},[messages]);
+  useEffect(()=>{if(mOn)water.dim(speaking);},[speaking,mOn]);
+  useEffect(()=>{
+    if(screen==="chat"&&!greeted&&apiKey){setGreeted(true);callFern("Hi, I just opened the app. I'm here and I need someone to talk to.",true);}
+  },[screen,apiKey]);
+
+  const saveKey=(k)=>{localStorage.setItem("fern_key",k);setApiKey(k);};
+  const resetKey=()=>{localStorage.removeItem("fern_key");setApiKey("");setMessages([]);setGreeted(false);};
+
+  const speak=useCallback((text)=>{
+    ttsRef.current?.cancel();
+    const u=new SpeechSynthesisUtterance(text);
+    u.rate=0.84;u.pitch=1.0;u.volume=1;
+    const vs=ttsRef.current?.getVoices()||[];
+    const v=vs.find(v=>v.name==="Samantha")||vs.find(v=>v.name==="Karen")||vs.find(v=>v.name==="Moira")||vs.find(v=>v.lang==="en-GB"&&v.localService)||vs.find(v=>v.lang.startsWith("en")&&v.localService)||vs.find(v=>v.lang.startsWith("en"));
+    if(v)u.voice=v;
+    u.onstart=()=>setSpeaking(true);
+    u.onend=()=>setSpeaking(false);
+    u.onerror=()=>setSpeaking(false);
+    setTimeout(()=>ttsRef.current?.speak(u),80);
+  },[]);
+
+  const callFern=useCallback(async(userText,isGreeting=false)=>{
+    if(loadRef.current)return;
+    loadRef.current=true;setAiLoading(true);
+    const userMsg={role:"user",content:userText};
+    const history=isGreeting?[userMsg]:[...msgsRef.current,userMsg];
+    if(!isGreeting)setMessages(history);
+    try{
+      const res=await fetch("https://api.groq.com/openai/v1/chat/completions",{
+        method:"POST",
+        headers:{"Content-Type":"application/json","Authorization":`Bearer ${apiKey}`},
+        body:JSON.stringify({model:"llama-3.3-70b-versatile",max_tokens:300,messages:[{role:"system",content:SYSTEM},...history.map(m=>({role:m.role,content:m.content}))]}),
+      });
+      const data=await res.json();
+      const reply=data.choices?.[0]?.message?.content?.trim()||"I'm right here with you. Take your time.";
+      setMessages(p=>[...p,{role:"assistant",content:reply}]);
+      speak(reply);
+    }catch(e){
+      const fb="I'm still here with you. Something got quiet — want to try again?";
+      setMessages(p=>[...p,{role:"assistant",content:fb}]);
+      speak(fb);
+    }
+    loadRef.current=false;setAiLoading(false);setMicState("idle");
+  },[speak,apiKey]);
+
+  const handleMicTap=useCallback(()=>{
+    if(micState==="listening"){recRef.current?.stop();return;}
+    if(micState==="processing"||loadRef.current)return;
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){alert("Voice works best in Chrome.");return;}
+    ttsRef.current?.cancel();setSpeaking(false);
+    const r=new SR();
+    r.lang="en-US";r.continuous=false;r.interimResults=false;r.maxAlternatives=1;
+    r.onstart=()=>setMicState("listening");
+    r.onresult=e=>{const t=Array.from(e.results).map(r=>r[0].transcript).join(" ").trim();if(t){setMicState("processing");callFern(t,false);}else setMicState("idle");};
+    r.onerror=()=>setMicState("idle");
+    r.onend=()=>setMicState(s=>s==="listening"?"idle":s);
+    recRef.current=r;
+    try{r.start();}catch{setMicState("idle");}
+  },[micState,callFern]);
+
+  const handleSend=useCallback(()=>{
+    const t=inputText.trim();
+    if(!t||loadRef.current||micState!=="idle")return;
+    setInputText("");callFern(t,false);
+  },[inputText,micState,callFern]);
+
+  const saveMood=()=>{if(!mood)return;const day=new Date().toLocaleDateString("en-US",{weekday:"short"});setMoodHistory(p=>[...p,{mood,note:moodNote,date:day}]);setMoodSaved(true);setMoodNote("");setTimeout(()=>setMoodSaved(false),2500);};
+  const runBreath=(i)=>{setBPhase(i);setbScale(BREATH[i].scale);bTimer.current=setTimeout(()=>runBreath((i+1)%BREATH.length),BREATH[i].dur);};
+  const toggleBreathe=()=>{if(bActive){clearTimeout(bTimer.current);setbActive(false);setBPhase(0);setbScale(1);}else{setbActive(true);runBreath(0);}};
+  const saveJournal=()=>{if(!journal.trim())return;const date=new Date().toLocaleDateString("en-US",{month:"long",day:"numeric"});setJournals(p=>[{date,preview:journal.slice(0,60)+"…"},...p]);setJournal("");setJSaved(true);setTimeout(()=>setJSaved(false),2500);};
+  const toggleMusic=async()=>{if(mBusy)return;setMBusy(true);try{if(mOn){await water.stop();setMOn(false);}else{await water.start();setMOn(true);}}catch(e){console.error(e);}setMBusy(false);};
+
+  // Show setup screen if no API key
+  if(!apiKey) return <SetupScreen onSave={saveKey}/>;
+
+  const m={mOn,mBusy,mToggle:toggleMusic};
+  const NAV=[{id:"home",icon:"🏡",label:"Home"},{id:"chat",icon:"🌿",label:"Talk"},{id:"mood",icon:"🌤",label:"Mood"},{id:"breathe",icon:"🌬️",label:"Breathe"},{id:"journal",icon:"📖",label:"Journal"}];
+
+  return <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:"#F2EDE4",fontFamily:"'Palatino Linotype','Book Antiqua',Palatino,Georgia,serif"}}>
+    {screen==="home"    &&<Home mood={mood} setScreen={setScreen} onReset={resetKey} {...m}/>}
+    {screen==="chat"    &&<Chat messages={messages} aiLoading={aiLoading} micState={micState} speaking={speaking} inputText={inputText} setInputText={setInputText} handleMicTap={handleMicTap} handleSend={handleSend} {...m}/>}
+    {screen==="mood"    &&<Mood mood={mood} setMood={setMood} note={moodNote} setNote={setMoodNote} saved={moodSaved} save={saveMood} history={moodHistory} {...m}/>}
+    {screen==="breathe" &&<Breathe phase={bPhase} active={bActive} scale={bScale} toggle={toggleBreathe} {...m}/>}
+    {screen==="journal" &&<Journal text={journal} setText={setJournal} entries={journals} saved={jSaved} save={saveJournal} prompt={prompt} {...m}/>}
+    <nav style={{display:"flex",background:"#fff",borderTop:`1px solid ${C.dew}`,position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,zIndex:100,boxShadow:"0 -2px 16px rgba(30,58,30,0.08)"}}>
+      {NAV.map(n=><button key={n.id} onClick={()=>setScreen(n.id)} style={{flex:1,padding:"11px 4px 9px",background:"none",border:"none",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:3,color:screen===n.id?C.forest:C.stone,fontSize:10,fontFamily:"inherit",borderTop:screen===n.id?`2px solid ${C.moss}`:"2px solid transparent"}}>
+        <span style={{fontSize:20}}>{n.icon}</span><span>{n.label}</span>
+      </button>)}
+    </nav>
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
