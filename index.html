@@ -25,7 +25,7 @@
 <div id="root"></div>
 <script type="text/babel">
 const {useState,useRef,useEffect,useCallback}=React;
-
+ 
 // ── Palette ───────────────────────────────────────────────
 const C={forest:"#1E3A1E",moss:"#3D6B45",sage:"#6B9E72",mist:"#A8C8A8",dew:"#D4EBD4",cream:"#F2EDE4",warm:"#FBF7F0",bark:"#7A5C3A",stone:"#5A6E5C",gold:"#C8A85A",night:"#0F2010"};
 const MOODS=[{emoji:"🌱",label:"Growing",value:5},{emoji:"☁️",label:"Cloudy",value:4},{emoji:"🍂",label:"Heavy",value:3},{emoji:"🌧️",label:"Stormy",value:2},{emoji:"🌑",label:"Lost",value:1}];
@@ -35,18 +35,16 @@ const SYSTEM=`Your name is Fern. You are a warm, deeply human therapeutic compan
 Your whole purpose: make people feel genuinely heard — like they've sat with someone who truly cares, has all the time in the world, and will never judge them.
 HOW YOU SPEAK: Warm, soft, unhurried — like a trusted friend who is quietly wise. Always reflect what you hear first: "That sounds really hard." "It makes sense you'd feel that way." Never rush to fix unless they ask. Ask only ONE gentle open question at a time. 2-4 warm sentences. No bullet points or lists. Natural flowing sentences only.
 LIMITS: Never diagnose. If crisis, gently say "I want to make sure you're safe right now" and encourage professional support. If asked if real: "I'm an AI, but my care for how you're feeling right now is completely real."`;
-
+ 
 // ── Water Soundscape ──────────────────────────────────────
-// Generates realistic flowing water using layered noise + filters
 class WaterSound {
   constructor(){this.on=false;this.nodes=[];this.masterVol=null;}
-
+ 
   async start(){
     if(this.on)return;
     await Tone.start();
     this.masterVol=new Tone.Volume(-18).toDestination();
-
-    // Layer 1: Deep river rumble — low filtered brown noise
+ 
     const rumbleNoise=new Tone.Noise("brown");
     const rumbleFilter=new Tone.Filter({frequency:180,type:"lowpass",rolloff:-24});
     const rumbleVol=new Tone.Volume(-8);
@@ -56,8 +54,7 @@ class WaterSound {
     rumbleTremolo.connect(rumbleVol);
     rumbleVol.connect(this.masterVol);
     rumbleNoise.start();
-
-    // Layer 2: Main flowing water — mid pink noise shaped like a stream
+ 
     const streamNoise=new Tone.Noise("pink");
     const streamFilter=new Tone.Filter({frequency:900,type:"bandpass",Q:0.4});
     const streamFilter2=new Tone.Filter({frequency:2200,type:"lowpass",rolloff:-12});
@@ -69,8 +66,7 @@ class WaterSound {
     streamTremolo.connect(streamVol);
     streamVol.connect(this.masterVol);
     streamNoise.start();
-
-    // Layer 3: Sparkling surface ripples — high filtered white noise
+ 
     const sparkleNoise=new Tone.Noise("white");
     const sparkleFilter=new Tone.Filter({frequency:3500,type:"highpass"});
     const sparkleFilter2=new Tone.Filter({frequency:6000,type:"lowpass"});
@@ -82,8 +78,7 @@ class WaterSound {
     sparkleTremolo.connect(sparkleVol);
     sparkleVol.connect(this.masterVol);
     sparkleNoise.start();
-
-    // Layer 4: Occasional gentle droplet pings
+ 
     const dropSynth=new Tone.Synth({
       oscillator:{type:"sine"},
       envelope:{attack:0.001,decay:0.4,sustain:0,release:0.3},
@@ -98,21 +93,20 @@ class WaterSound {
         dropSynth.triggerAttackRelease(dropNotes[di++%dropNotes.length],"32n",t);
       }
     },"4n");
-
-    // Layer 5: Soft nature reverb — makes everything feel outdoor
+ 
     const outdoorRev=new Tone.Reverb({decay:8,wet:0.25}).connect(this.masterVol);
     streamVol.connect(outdoorRev);
-
+ 
     Tone.getTransport().bpm.value=60;
     Tone.getTransport().start();
     dropLoop.start(0);
-
+ 
     this.on=true;
     this.nodes=[rumbleNoise,streamNoise,sparkleNoise,dropSynth,dropLoop,rumbleFilter,streamFilter,streamFilter2,sparkleFilter,sparkleFilter2,rumbleTremolo,streamTremolo,sparkleTremolo,rumbleVol,streamVol,sparkleVol,dropRev,outdoorRev];
   }
-
+ 
   dim(yes){this.masterVol?.volume.rampTo(yes?-30:-18,1.5);}
-
+ 
   async stop(){
     Tone.getTransport().stop();
     this.nodes.forEach(n=>{try{n.dispose();}catch{}});
@@ -120,26 +114,26 @@ class WaterSound {
   }
 }
 const water=new WaterSound();
-
+ 
 // ── Shared UI ─────────────────────────────────────────────
 const hdr={background:`linear-gradient(160deg,${C.night} 0%,${C.forest} 55%,${C.moss} 100%)`,padding:"52px 20px 22px",position:"relative",overflow:"hidden"};
 const card={background:"#fff",borderRadius:18,padding:20,margin:"14px 14px 0",boxShadow:"0 2px 16px rgba(30,58,30,0.07)"};
 const mkBtn=(x={})=>({background:`linear-gradient(135deg,${C.forest},${C.moss})`,color:"#fff",border:"none",borderRadius:50,padding:"11px 24px",fontSize:13,cursor:"pointer",fontFamily:"inherit",...x});
 const bub=(u)=>({background:u?`linear-gradient(135deg,${C.forest},${C.moss})`:"#fff",color:u?"#fff":C.forest,borderRadius:u?"18px 18px 4px 18px":"18px 18px 18px 4px",padding:"12px 16px",maxWidth:"82%",alignSelf:u?"flex-end":"flex-start",fontSize:14,lineHeight:1.7,boxShadow:"0 2px 8px rgba(30,58,30,0.09)",marginBottom:6,animation:"fadeUp 0.25s ease"});
 const Leaf=({top,left,size=60,op=0.07,rot=0})=><div style={{position:"absolute",top,left,width:size,height:size,borderRadius:"0 60% 0 60%",background:C.sage,opacity:op,transform:`rotate(${rot}deg)`,pointerEvents:"none"}}/>;
-
+ 
 function MusicBtn({on,busy,toggle}){
   return <button onClick={toggle} disabled={busy} style={{position:"absolute",top:14,right:14,background:on?"rgba(100,180,200,0.25)":"rgba(255,255,255,0.1)",border:`1px solid ${on?"#7EC8D8":"rgba(255,255,255,0.2)"}`,borderRadius:50,padding:"6px 14px",color:on?"#7EC8D8":"rgba(255,255,255,0.65)",fontSize:11,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}>
     {busy?"⏳":on?"🌊":"🔇"}<span>{busy?"Starting…":on?"Water on":"Sound off"}</span>
   </button>;
 }
-
+ 
 // ── API Key Setup Screen ───────────────────────────────────
 function SetupScreen({onSave}){
   const [key,setKey]=useState("");
   const [err,setErr]=useState("");
   const [testing,setTesting]=useState(false);
-
+ 
   const test=async()=>{
     if(!key.trim()){setErr("Please paste your API key first.");return;}
     if(!key.startsWith("gsk_")){setErr("That doesn't look right. The key should start with gsk_...");return;}
@@ -156,15 +150,15 @@ function SetupScreen({onSave}){
     }catch{setErr("Connection error. Make sure you're online.");}
     setTesting(false);
   };
-
+ 
   return <div style={{minHeight:"100vh",background:`linear-gradient(160deg,${C.night},${C.forest},${C.moss})`,display:"flex",alignItems:"center",justifyContent:"center",padding:24}}>
     <div style={{background:"rgba(255,255,255,0.95)",borderRadius:24,padding:28,maxWidth:360,width:"100%"}}>
       <div style={{textAlign:"center",marginBottom:24}}>
         <div style={{fontSize:48,marginBottom:12}}>🌿</div>
         <h1 style={{color:C.forest,fontSize:24,fontWeight:"bold",marginBottom:8}}>Welcome to Fern</h1>
-        <p style={{color:C.stone,fontSize:14,lineHeight:1.7}}>To talk with Fern, you need a free Anthropic API key. It only takes 2 minutes to get one.</p>
+        <p style={{color:C.stone,fontSize:14,lineHeight:1.7}}>To talk with Fern, you need a free Groq API key. It only takes 2 minutes to get one.</p>
       </div>
-
+ 
       <div style={{background:C.dew,borderRadius:12,padding:14,marginBottom:20,fontSize:13,color:C.forest,lineHeight:1.8}}>
         <strong>Get your free Groq key:</strong><br/>
         1. Go to <strong>console.groq.com</strong><br/>
@@ -172,7 +166,7 @@ function SetupScreen({onSave}){
         3. Click <strong>API Keys → Create API Key</strong><br/>
         4. Copy and paste it below
       </div>
-
+ 
       <input
         value={key}
         onChange={e=>setKey(e.target.value)}
@@ -180,14 +174,14 @@ function SetupScreen({onSave}){
         style={{width:"100%",padding:"12px 16px",borderRadius:12,border:`1.5px solid ${err?C.bark:C.mist}`,fontSize:13,color:C.forest,background:C.warm,outline:"none",boxSizing:"border-box",marginBottom:8,fontFamily:"monospace"}}
       />
       {err&&<div style={{color:C.bark,fontSize:12,marginBottom:10,padding:"8px 12px",background:"#FFF5EC",borderRadius:8}}>{err}</div>}
-
+ 
       <button onClick={test} disabled={testing} style={{...mkBtn({width:"100%",padding:"13px",fontSize:14,textAlign:"center",opacity:testing?0.7:1})}}>{testing?"Testing connection…":"Connect to Fern 🌿"}</button>
-
+ 
       <p style={{color:C.stone,fontSize:11,textAlign:"center",marginTop:14,lineHeight:1.6}}>Your key stays on your device only. Fern never stores or shares it.</p>
     </div>
   </div>;
 }
-
+ 
 // ── Home ──────────────────────────────────────────────────
 function Home({mood,setScreen,mOn,mBusy,mToggle,onReset}){
   return <div style={{paddingBottom:80}}>
@@ -229,7 +223,7 @@ function Home({mood,setScreen,mOn,mBusy,mToggle,onReset}){
     </div>
   </div>;
 }
-
+ 
 // ── Chat ──────────────────────────────────────────────────
 function Chat({messages,aiLoading,micState,speaking,inputText,setInputText,handleMicTap,handleSend,mOn,mBusy,mToggle}){
   const endRef=useRef(null);
@@ -278,7 +272,7 @@ function Chat({messages,aiLoading,micState,speaking,inputText,setInputText,handl
     </div>
   </div>;
 }
-
+ 
 // ── Mood ──────────────────────────────────────────────────
 function Mood({mood,setMood,note,setNote,saved,save,history,mOn,mBusy,mToggle}){
   return <div style={{paddingBottom:80}}>
@@ -309,7 +303,7 @@ function Mood({mood,setMood,note,setNote,saved,save,history,mOn,mBusy,mToggle}){
     </div>
   </div>;
 }
-
+ 
 // ── Breathe ───────────────────────────────────────────────
 function Breathe({phase,active,scale,toggle,mOn,mBusy,mToggle}){
   return <div style={{paddingBottom:80}}>
@@ -332,7 +326,7 @@ function Breathe({phase,active,scale,toggle,mOn,mBusy,mToggle}){
     </div>
   </div>;
 }
-
+ 
 // ── Journal ───────────────────────────────────────────────
 function Journal({text,setText,entries,saved,save,prompt,mOn,mBusy,mToggle}){
   const today=new Date().toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
@@ -360,7 +354,7 @@ function Journal({text,setText,entries,saved,save,prompt,mOn,mBusy,mToggle}){
     </div>
   </div>;
 }
-
+ 
 // ── Main App ──────────────────────────────────────────────
 function App(){
   const [apiKey,setApiKey]=useState(()=>localStorage.getItem("fern_key")||"");
@@ -384,35 +378,52 @@ function App(){
   const [jSaved,setJSaved]=useState(false);
   const [prompt]=useState(PROMPTS[Math.floor(Math.random()*PROMPTS.length)]);
   const [greeted,setGreeted]=useState(false);
-
+ 
   const msgsRef=useRef([]);
   const loadRef=useRef(false);
   const recRef=useRef(null);
   const bTimer=useRef(null);
   const ttsRef=useRef(window.speechSynthesis);
-
+ 
+  // ── FIX 1: Load voices properly via voiceschanged event ──
+  const voicesRef=useRef([]);
+  useEffect(()=>{
+    const load=()=>{ voicesRef.current=window.speechSynthesis?.getVoices()||[]; };
+    load(); // try immediately (works in Firefox)
+    window.speechSynthesis?.addEventListener("voiceschanged",load);
+    return()=>window.speechSynthesis?.removeEventListener("voiceschanged",load);
+  },[]);
+ 
   useEffect(()=>{msgsRef.current=messages;},[messages]);
   useEffect(()=>{if(mOn)water.dim(speaking);},[speaking,mOn]);
   useEffect(()=>{
     if(screen==="chat"&&!greeted&&apiKey){setGreeted(true);callFern("Hi, I just opened the app. I'm here and I need someone to talk to.",true);}
   },[screen,apiKey]);
-
+ 
   const saveKey=(k)=>{localStorage.setItem("fern_key",k);setApiKey(k);};
   const resetKey=()=>{localStorage.removeItem("fern_key");setApiKey("");setMessages([]);setGreeted(false);};
-
+ 
+  // ── FIX 2: speak() now uses voicesRef (always populated) ──
   const speak=useCallback((text)=>{
-    ttsRef.current?.cancel();
+    if(!ttsRef.current)return;
+    ttsRef.current.cancel();
     const u=new SpeechSynthesisUtterance(text);
     u.rate=0.84;u.pitch=1.0;u.volume=1;
-    const vs=ttsRef.current?.getVoices()||[];
-    const v=vs.find(v=>v.name==="Samantha")||vs.find(v=>v.name==="Karen")||vs.find(v=>v.name==="Moira")||vs.find(v=>v.lang==="en-GB"&&v.localService)||vs.find(v=>v.lang.startsWith("en")&&v.localService)||vs.find(v=>v.lang.startsWith("en"));
+    const vs=voicesRef.current;
+    const v=
+      vs.find(v=>v.name==="Samantha")||
+      vs.find(v=>v.name==="Karen")||
+      vs.find(v=>v.name==="Moira")||
+      vs.find(v=>v.lang==="en-GB"&&v.localService)||
+      vs.find(v=>v.lang.startsWith("en")&&v.localService)||
+      vs.find(v=>v.lang.startsWith("en"));
     if(v)u.voice=v;
     u.onstart=()=>setSpeaking(true);
     u.onend=()=>setSpeaking(false);
     u.onerror=()=>setSpeaking(false);
     setTimeout(()=>ttsRef.current?.speak(u),80);
   },[]);
-
+ 
   const callFern=useCallback(async(userText,isGreeting=false)=>{
     if(loadRef.current)return;
     loadRef.current=true;setAiLoading(true);
@@ -436,41 +447,59 @@ function App(){
     }
     loadRef.current=false;setAiLoading(false);setMicState("idle");
   },[speak,apiKey]);
-
+ 
+  // ── FIX 3: Mic — stop TTS before recording, handle errors gracefully ──
   const handleMicTap=useCallback(()=>{
     if(micState==="listening"){recRef.current?.stop();return;}
     if(micState==="processing"||loadRef.current)return;
+ 
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-    if(!SR){alert("Voice works best in Chrome.");return;}
-    ttsRef.current?.cancel();setSpeaking(false);
+    if(!SR){alert("Voice input works best in Chrome or Edge. Try typing instead!");return;}
+ 
+    // Stop any ongoing speech before listening
+    ttsRef.current?.cancel();
+    setSpeaking(false);
+ 
     const r=new SR();
-    r.lang="en-US";r.continuous=false;r.interimResults=false;r.maxAlternatives=1;
+    r.lang="en-US";
+    r.continuous=false;
+    r.interimResults=false;
+    r.maxAlternatives=1;
+ 
     r.onstart=()=>setMicState("listening");
-    r.onresult=e=>{const t=Array.from(e.results).map(r=>r[0].transcript).join(" ").trim();if(t){setMicState("processing");callFern(t,false);}else setMicState("idle");};
-    r.onerror=()=>setMicState("idle");
+    r.onresult=e=>{
+      const t=Array.from(e.results).map(r=>r[0].transcript).join(" ").trim();
+      if(t){setMicState("processing");callFern(t,false);}
+      else setMicState("idle");
+    };
+    r.onerror=(e)=>{
+      console.warn("Mic error:",e.error);
+      if(e.error==="not-allowed"){alert("Microphone access was denied. Please allow mic access in your browser settings.");}
+      setMicState("idle");
+    };
     r.onend=()=>setMicState(s=>s==="listening"?"idle":s);
+ 
     recRef.current=r;
-    try{r.start();}catch{setMicState("idle");}
+    try{r.start();}catch(e){console.warn(e);setMicState("idle");}
   },[micState,callFern]);
-
+ 
   const handleSend=useCallback(()=>{
     const t=inputText.trim();
     if(!t||loadRef.current||micState!=="idle")return;
     setInputText("");callFern(t,false);
   },[inputText,micState,callFern]);
-
+ 
   const saveMood=()=>{if(!mood)return;const day=new Date().toLocaleDateString("en-US",{weekday:"short"});setMoodHistory(p=>[...p,{mood,note:moodNote,date:day}]);setMoodSaved(true);setMoodNote("");setTimeout(()=>setMoodSaved(false),2500);};
   const runBreath=(i)=>{setBPhase(i);setbScale(BREATH[i].scale);bTimer.current=setTimeout(()=>runBreath((i+1)%BREATH.length),BREATH[i].dur);};
   const toggleBreathe=()=>{if(bActive){clearTimeout(bTimer.current);setbActive(false);setBPhase(0);setbScale(1);}else{setbActive(true);runBreath(0);}};
   const saveJournal=()=>{if(!journal.trim())return;const date=new Date().toLocaleDateString("en-US",{month:"long",day:"numeric"});setJournals(p=>[{date,preview:journal.slice(0,60)+"…"},...p]);setJournal("");setJSaved(true);setTimeout(()=>setJSaved(false),2500);};
   const toggleMusic=async()=>{if(mBusy)return;setMBusy(true);try{if(mOn){await water.stop();setMOn(false);}else{await water.start();setMOn(true);}}catch(e){console.error(e);}setMBusy(false);};
-
-  // Show setup screen if no API key
+ 
   if(!apiKey) return <SetupScreen onSave={saveKey}/>;
-
+ 
   const m={mOn,mBusy,mToggle:toggleMusic};
   const NAV=[{id:"home",icon:"🏡",label:"Home"},{id:"chat",icon:"🌿",label:"Talk"},{id:"mood",icon:"🌤",label:"Mood"},{id:"breathe",icon:"🌬️",label:"Breathe"},{id:"journal",icon:"📖",label:"Journal"}];
-
+ 
   return <div style={{maxWidth:430,margin:"0 auto",minHeight:"100vh",background:"#F2EDE4",fontFamily:"'Palatino Linotype','Book Antiqua',Palatino,Georgia,serif"}}>
     {screen==="home"    &&<Home mood={mood} setScreen={setScreen} onReset={resetKey} {...m}/>}
     {screen==="chat"    &&<Chat messages={messages} aiLoading={aiLoading} micState={micState} speaking={speaking} inputText={inputText} setInputText={setInputText} handleMicTap={handleMicTap} handleSend={handleSend} {...m}/>}
@@ -484,7 +513,7 @@ function App(){
     </nav>
   </div>;
 }
-
+ 
 ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
 </body>
